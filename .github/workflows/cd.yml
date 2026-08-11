@@ -1,0 +1,48 @@
+name: CD - Deploy to ECS
+
+on:
+  push:
+    branches:
+      - main
+
+permissions:
+  id-token: write
+  contents: read
+
+env:
+  AWS_REGION: us-east-1
+  ECR_REPOSITORY: basic-web-code
+  ECS_CLUSTER: basic-web-cluster
+  ECS_SERVICE: basic-web-service
+  ECS_TASK_DEFINITION: .aws/task-definition.json
+  CONTAINER_NAME: basic-web
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v6
+        with:
+          role-to-assume: arn:aws:iam::096563427235:role/basic-web-cd-role
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Render ECS task definition
+        id: task-def
+        uses: aws-actions/amazon-ecs-render-task-definition@v1
+        with:
+          task-definition: ${{ env.ECS_TASK_DEFINITION }}
+          container-name: ${{ env.CONTAINER_NAME }}
+          image: 096563427235.dkr.ecr.us-east-1.amazonaws.com/basic-web-code:${{ github.sha }}
+
+      - name: Deploy to Amazon ECS
+        uses: aws-actions/amazon-ecs-deploy-task-definition@v2
+        with:
+          task-definition: ${{ steps.task-def.outputs.task-definition }}
+          service: ${{ env.ECS_SERVICE }}
+          cluster: ${{ env.ECS_CLUSTER }}
+          wait-for-service-stability: true
